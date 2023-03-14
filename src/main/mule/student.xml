@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd 
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+    <http:listener-config name="student-httpListenerConfig">
+        <http:listener-connection host="0.0.0.0" port="8081" />
+    </http:listener-config>
+    <apikit:config name="student-config" api="resource::03e670cf-0374-496e-8fca-03dca1a36e09:student1:1.0.0:raml:zip:student.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+    <file:config name="File_Config" doc:name="File Config" doc:id="a5187eb0-4114-4ed5-9356-62439a5c309c" >
+		<file:connection workingDir="C:\Users\Excel\OneDrive\Desktop\mule4\2 - Copy" />
+	</file:config>
+	<flow name="student-main">
+        <http:listener config-ref="student-httpListenerConfig" path="/api/{school}">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="student-config" />
+    </flow>
+    <flow name="student-console">
+        <http:listener config-ref="student-httpListenerConfig" path="/console/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:console config-ref="student-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+	<sub-flow name="studentSub_Flow" doc:id="8fe5eee7-4d30-4e42-a787-f429392437e9" >
+		<validation:is-number doc:id="61ec0824-b828-4e89-a0eb-59e51f0384c7" value="#[attributes.queryParams.rollno as Number]"/>
+		<validation:is-not-blank-string doc:name="Is not blank string" doc:id="8a6aa459-efb8-4b58-9db4-46915765f4df" value="#[attributes.uriParams.school]" message='"null parameters should not be null"'/>
+	</sub-flow>
+	<flow name="get:\(school):student-config">
+        <ee:transform>
+            <ee:variables>
+                <ee:set-variable variableName="school"><![CDATA[attributes.uriParams.'school']]></ee:set-variable>
+				<ee:set-variable variableName="username" ><![CDATA[attributes.headers.username]]></ee:set-variable>
+				<ee:set-variable variableName="password" ><![CDATA[attributes.headers.password]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+		<choice doc:name="Choice" doc:id="9397d44b-3b25-4da5-bf67-fcbb78860df3" >
+			<when expression='#[vars.username == "vittal" and vars.password == "vittu@123"]'>
+				<logger level="INFO" doc:name="Logger" doc:id="445439b1-9df9-4756-ab9a-e364d8c06276" message="flow entered successfully"/>
+				<file:read doc:name="Read" doc:id="144e9905-4414-4a66-9220-d5107ae7c5c1" config-ref="File_Config" path="C:\Users\Excel\OneDrive\Desktop\mule4\2 - Copy\student.json"/>
+				<ee:transform doc:name="Transform Message" doc:id="f5459683-b369-41ae-ac17-40a2f544f9ed" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="c8d5dd0a-da8f-473f-a721-f434ca4b7530" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message" : "invalid request"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+    </flow>
+</mule>
